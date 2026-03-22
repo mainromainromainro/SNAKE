@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Snake</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="app__header">
+        <div>
+          <h1>Snake</h1>
+          <p class="app__subtitle">Classic Snake, kept intentionally simple.</p>
+        </div>
+        <div class="hud" aria-label="Game status">
+          <p class="hud__item">
+            <span class="hud__label">Score</span>
+            <strong id="score">0</strong>
+          </p>
+          <p class="hud__item">
+            <span class="hud__label">Best</span>
+            <strong id="best-score">0</strong>
+          </p>
+          <p class="hud__item">
+            <span class="hud__label">Status</span>
+            <strong id="status">Running</strong>
+          </p>
+        </div>
+      </header>
+
+      <section class="app__content">
+        <section class="panel panel--game">
+          <div class="panel__actions">
+            <button id="pause-button" type="button">Pause</button>
+            <button id="restart-button" type="button">Restart</button>
+          </div>
+          <div id="board-shell" class="board-shell">
+            <div
+              id="board"
+              class="board"
+              aria-label="Snake board"
+              aria-live="polite"
+            ></div>
+            <div
+              id="effects-layer"
+              class="effects-layer"
+              aria-hidden="true"
+            ></div>
+            <div
+              id="event-banner"
+              class="event-banner"
+              aria-live="polite"
+            ></div>
+          </div>
+        </section>
+
+        <aside class="panel leaderboard" aria-labelledby="leaderboard-title">
+          <div class="leaderboard__header">
+            <h2 id="leaderboard-title">Best Scores</h2>
+            <p class="leaderboard__subtitle">Top 5 runs saved in this browser.</p>
+          </div>
+          <ol id="leaderboard-list" class="leaderboard__list"></ol>
+        </aside>
+      </section>
+
+      <section class="touch-controls" aria-label="On-screen direction controls">
+        <div class="touch-controls__row">
+          <button type="button" data-direction="up" aria-label="Move up">Up</button>
+        </div>
+        <div class="touch-controls__row">
+          <button type="button" data-direction="left" aria-label="Move left">Left</button>
+          <button type="button" data-direction="down" aria-label="Move down">Down</button>
+          <button type="button" data-direction="right" aria-label="Move right">Right</button>
+        </div>
+      </section>
+
+      <p class="help">
+        Use arrow keys or WASD to steer. Press Space to pause or resume, and R
+        to restart.
+      </p>
+    </main>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>
