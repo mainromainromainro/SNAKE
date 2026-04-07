@@ -137,9 +137,11 @@ const eventBannerElement = document.querySelector("#event-banner");
 const scoreElement = document.querySelector("#score");
 const bestScoreElement = document.querySelector("#best-score");
 const statusElement = document.querySelector("#status");
+const powerStatusElement = document.querySelector("#power-status");
 const pauseButton = document.querySelector("#pause-button");
 const restartButton = document.querySelector("#restart-button");
 const leaderboardListElement = document.querySelector("#leaderboard-list");
+const powerStatusItemElement = powerStatusElement?.closest(".hud__item");
 
 const defaultOptions = {
   cols: BOARD_COLS,
@@ -167,6 +169,17 @@ function getBestScore() {
 
 function pickMessage(messages) {
   return messages[Math.floor(Math.random() * messages.length)];
+}
+
+function formatPowerStatus(activeEffect) {
+  if (!activeEffect) {
+    return "None";
+  }
+
+  return `${activeEffect.label} ${Math.max(
+    1,
+    Math.ceil(activeEffect.remainingMs / 1000)
+  )}s`;
 }
 
 function applyPalette(palette) {
@@ -329,13 +342,19 @@ function render() {
   const snakeKeys = new Set(state.snake.map(getPositionKey));
   const headKey = getPositionKey(state.snake[0]);
   const foodKey = state.food ? getPositionKey(state.food) : null;
+  const powerItemKey = state.powerItem ? getPositionKey(state.powerItem) : null;
   const isTerminal = state.status === "gameover" || state.status === "won";
+  const powerActive = Boolean(state.activeEffect);
 
   scoreElement.textContent = String(state.score);
   bestScoreElement.textContent = String(getBestScore());
   statusElement.textContent = STATUS_LABELS[state.status];
+  powerStatusElement.textContent = formatPowerStatus(state.activeEffect);
   pauseButton.textContent = state.status === "paused" ? "Resume" : "Pause";
   pauseButton.disabled = isTerminal;
+  powerStatusItemElement?.classList.toggle("hud__item--power-active", powerActive);
+  document.body.classList.toggle("body--rainbow-active", powerActive);
+  boardShellElement.classList.toggle("board-shell--rainbow-active", powerActive);
 
   for (let y = 0; y < state.rows; y += 1) {
     for (let x = 0; x < state.cols; x += 1) {
@@ -343,16 +362,28 @@ function render() {
       const cell = cells[y * state.cols + x];
       cell.className = "cell";
 
+      if (powerItemKey === key) {
+        cell.classList.add("cell--power-item");
+      }
+
       if (foodKey === key) {
         cell.classList.add("cell--food");
       }
 
       if (snakeKeys.has(key)) {
         cell.classList.add("cell--snake");
+
+        if (powerActive) {
+          cell.classList.add("cell--snake-rainbow");
+        }
       }
 
       if (headKey === key) {
         cell.classList.add("cell--head");
+
+        if (powerActive) {
+          cell.classList.add("cell--head-rainbow");
+        }
       }
     }
   }
@@ -374,11 +405,11 @@ function scheduleNextTick() {
     baseDelay: BASE_TICK_DELAY,
     minDelay: MIN_TICK_DELAY,
     stepDelay: TICK_STEP_DELAY
-  });
+  }, state.activeEffect);
 
   tickTimeoutId = window.setTimeout(() => {
     tickTimeoutId = null;
-    updateState(stepGame(state));
+    updateState(stepGame(state, { elapsedMs: delay }));
     scheduleNextTick();
   }, delay);
 }
@@ -395,12 +426,14 @@ function clearBoardEffects() {
   boardShellElement.classList.remove(
     "board-shell--eat",
     "board-shell--lose",
-    "board-shell--win"
+    "board-shell--win",
+    "board-shell--power"
   );
   scoreElement.classList.remove("hud__value--pop");
   eventBannerElement.className = "event-banner";
   eventBannerElement.textContent = "";
   effectsLayerElement.replaceChildren();
+  document.body.classList.remove("body--rainbow-active");
 }
 
 function triggerTransientClass(element, className, duration) {
@@ -442,8 +475,10 @@ function toBoardPercent(position) {
 
 function spawnBurst(type, coordinates, label = "") {
   const burst = document.createElement("div");
-  const particleCount = type === "win" ? 14 : type === "lose" ? 10 : 8;
-  const duration = type === "win" ? 1400 : type === "lose" ? 900 : 700;
+  const particleCount =
+    type === "win" ? 14 : type === "lose" ? 10 : type === "power" ? 12 : 8;
+  const duration =
+    type === "win" ? 1400 : type === "lose" ? 900 : type === "power" ? 1200 : 700;
 
   burst.className = `burst burst--${type}`;
   burst.style.left = `${coordinates.x}%`;
@@ -466,7 +501,13 @@ function spawnBurst(type, coordinates, label = "") {
     particle.style.setProperty("--angle", `${(360 / particleCount) * index}deg`);
     particle.style.setProperty(
       "--distance",
-      type === "win" ? "5.5rem" : type === "lose" ? "4rem" : "3.1rem"
+      type === "win"
+        ? "5.5rem"
+        : type === "lose"
+          ? "4rem"
+          : type === "power"
+            ? "4.75rem"
+            : "3.1rem"
     );
     particle.style.setProperty("--delay", `${index * 18}ms`);
     burst.appendChild(particle);
@@ -537,9 +578,28 @@ function playWinEffect() {
   });
 }
 
+function playPowerEffect(previousState, nextState) {
+  triggerTransientClass(boardShellElement, "board-shell--power", 1150);
+  showBanner(nextState.activeEffect.label, "power", 1900);
+
+  if (previousState.powerItem) {
+    spawnBurst("power", toBoardPercent(previousState.powerItem), nextState.activeEffect.label);
+  }
+}
+
+function playPowerEndEffect(previousState) {
+  if (!previousState.activeEffect) {
+    return;
+  }
+
+  showBanner(`${previousState.activeEffect.label} ended`, "power-end", 1200);
+}
+
 function handleStateTransition(previousState, nextState) {
   const statusChanged = previousState.status !== nextState.status;
   const ateFood = nextState.score > previousState.score && previousState.food !== null;
+  const powerActivated = nextState.lastEvent?.type === "power-activated";
+  const powerEnded = nextState.lastEvent?.type === "power-ended";
 
   if (ateFood) {
     advancePalette();
@@ -557,8 +617,18 @@ function handleStateTransition(previousState, nextState) {
     return;
   }
 
+  if (powerActivated && nextState.activeEffect) {
+    playPowerEffect(previousState, nextState);
+    return;
+  }
+
   if (ateFood) {
     playEatEffect(previousState);
+    return;
+  }
+
+  if (powerEnded) {
+    playPowerEndEffect(previousState);
   }
 }
 
